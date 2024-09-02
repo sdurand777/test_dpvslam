@@ -25,6 +25,7 @@ dependencies:
   #- nvidia/label/cuda-12.1.0::cuda
   #- mkl=2024.0.0
   - pip:
+      - pypose
       - tqdm
       - wandb
       - imageio
