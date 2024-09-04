@@ -107,7 +107,10 @@ class Patchifier(nn.Module):
         g = F.avg_pool2d(g, 4, 4)
         return g
 
-    def forward(self, images, patches_per_image=80, disps=None, centroid_sel_strat='RANDOM', return_color=False):
+
+
+    #def forward(self, images, patches_per_image=80, disps=None, centroid_sel_strat='RANDOM', return_color=False):
+    def forward(self, images, disps = None, patches_per_image=80, centroid_sel_strat='RANDOM', return_color=False):
         """ extract patches from input images """
         fmap = self.fnet(images) / 4.0
         imap = self.inet(images) / 4.0
@@ -142,10 +145,27 @@ class Patchifier(nn.Module):
         if return_color:
             clr = altcorr.patchify(images[0], 4*(coords + 0.5), 0).view(b, -1, 3)
 
+        #import pdb; pdb.set_trace()
+
         if disps is None:
             disps = torch.ones(b, n, h, w, device="cuda")
 
+#         # grid 3, 132, 240 pour recuperer les indices pour els patches
+#         disps = disps.unsqueeze(0).unsqueeze(0)
+# # Diviser les dimensions par 4
+#         new_height = disps.shape[2] // 4
+#         new_width = disps.shape[3] // 4
+#
+# # Redimensionner l'image en divisant les dimensions par 4
+#         disps_resized = F.interpolate(disps, size=(new_height, new_width), mode='bilinear', align_corners=False)
+#         disps_resized = disps_resized.to(fmap.device)
+#
+#         #if DEBUG: import pdb; pdb.set_trace()
+#         grid, _ = coords_grid_with_index(disps_resized, device=fmap.device)
+
+        disps = torch.ones(b, n, h, w, device="cuda")
         grid, _ = coords_grid_with_index(disps, device=fmap.device)
+
         patches = altcorr.patchify(grid[0], coords, P//2).view(b, -1, 3, P, P)
 
         index = torch.arange(n, device="cuda").view(n, 1)

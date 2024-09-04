@@ -374,7 +374,8 @@ class DPVO:
         return flatmeshgrid(torch.arange(t0, t1, device="cuda"),
             torch.arange(max(self.n-r, 0), self.n, device="cuda"), indexing='ij')
 
-    def __call__(self, tstamp, image, intrinsics):
+    #def __call__(self, tstamp, image, intrinsics):
+    def __call__(self, tstamp, image, disp=None, intrinsics=None):
         """ track new frame """
 
         if self.cfg.CLASSIC_LOOP_CLOSURE:
@@ -390,10 +391,11 @@ class DPVO:
         
         with autocast(enabled=self.cfg.MIXED_PRECISION):
             fmap, gmap, imap, patches, _, clr = \
-                self.network.patchify(image,
-                    patches_per_image=self.cfg.PATCHES_PER_FRAME, 
-                    centroid_sel_strat=self.cfg.CENTROID_SEL_STRAT, 
-                    return_color=True)
+                self.network.patchify(  image,
+                                        disp,
+                                        patches_per_image=self.cfg.PATCHES_PER_FRAME, 
+                                        centroid_sel_strat=self.cfg.CENTROID_SEL_STRAT, 
+                                        return_color=True)
 
         ### update state attributes ###
         self.tlist.append(tstamp)
@@ -423,11 +425,11 @@ class DPVO:
                 tvec_qvec = self.poses[self.n-1]
                 self.pg.poses_[self.n] = tvec_qvec
 
-        # TODO better depth initialization
-        patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
-        if self.is_initialized:
-            s = torch.median(self.pg.patches_[self.n-3:self.n,:,2])
-            patches[:,:,2] = s
+        # # TODO better depth initialization
+        # patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
+        # if self.is_initialized:
+        #     s = torch.median(self.pg.patches_[self.n-3:self.n,:,2])
+        #     patches[:,:,2] = s
 
         self.pg.patches_[self.n] = patches
 
