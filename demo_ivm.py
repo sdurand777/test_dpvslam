@@ -21,6 +21,7 @@ def show_image(image, t=0):
     cv2.imshow('image', image / 255.0)
     cv2.waitKey(t)
 
+
 @torch.no_grad()
 def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False):
 
@@ -37,7 +38,8 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
     counter = 0
 
     while 1:
-        (t, image, intrinsics) = queue.get()
+       # (t, image, intrinsics) = queue.get()
+        (t, image, disp_sens, intrinsics) = queue.get(timeout=10)
         if t < 0: break
 
         counter += 1
