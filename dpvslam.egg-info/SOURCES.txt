@@ -28,8 +28,9 @@ dpvo/fastba/__init__.py
 dpvo/fastba/ba.cpp
 dpvo/fastba/ba.py
 dpvo/fastba/ba_cuda.cu
-dpvo/fastba_new/__init__.py
-dpvo/fastba_new/ba.py
+dpvo/fastba/block_e.cu
+dpvo/fastba_old/__init__.py
+dpvo/fastba_old/ba.py
 dpvo/lietorch/__init__.py
 dpvo/lietorch/broadcasting.py
 dpvo/lietorch/gradcheck.py

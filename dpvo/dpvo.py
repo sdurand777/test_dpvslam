@@ -318,6 +318,8 @@ class DPVO:
         full_jj = torch.cat((self.pg.jj_inac, self.pg.jj))
         full_kk = torch.cat((self.pg.kk_inac, self.pg.kk))
 
+        print("--- run global BA ---")
+
         self.pg.normalize()
         lmbda = torch.as_tensor([1e-4], device="cuda")
         t0 = self.pg.ii.min().item()
@@ -355,14 +357,22 @@ class DPVO:
                 else:
                     t0 = self.n - self.cfg.OPTIMIZATION_WINDOW if self.is_initialized else 1
                     t0 = max(t0, 1)
+
                     fastba.BA(self.poses, self.patches, self.intrinsics, 
                         target, weight, lmbda, self.pg.ii, self.pg.jj, self.pg.kk, t0, self.n, M=self.M, iterations=2, eff_impl=False)
+
+                    #import pdb; pdb.set_trace()
+
+                    # fastba.BA(self.poses, self.patches, self.intrinsics, 
+                    #     target, weight, lmbda, self.pg.ii, self.pg.jj, self.pg.kk, t0, self.n, 2)
             except:
                 print("Warning BA failed...")
 
             points = pops.point_cloud(SE3(self.poses), self.patches[:, :self.m], self.intrinsics, self.ix[:self.m])
             points = (points[...,1,1,:3] / points[...,1,1,3:]).reshape(-1, 3)
             self.pg.points_[:len(points)] = points[:]
+            
+            #import pdb; pdb.set_trace()
 
 
 
