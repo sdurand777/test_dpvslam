@@ -325,7 +325,12 @@ class DPVO:
             full_target, full_weight, lmbda, full_ii, full_jj, full_kk, t0, self.n, M=self.M, iterations=2, eff_impl=True)
         self.ran_global_ba[self.n] = True
 
+
+
+    # update comme dans DPVO ?
     def update(self):
+
+        # reprojection pour update les target pour le BA
         with Timer("other", enabled=self.enable_timing):
             coords = self.reproject()
 
@@ -359,6 +364,8 @@ class DPVO:
             points = (points[...,1,1,:3] / points[...,1,1,3:]).reshape(-1, 3)
             self.pg.points_[:len(points)] = points[:]
 
+
+
     def __edges_forw(self):
         r=self.cfg.PATCH_LIFETIME
         t0 = self.M * max((self.n - r), 0)
@@ -367,12 +374,16 @@ class DPVO:
             torch.arange(t0, t1, device="cuda"),
             torch.arange(self.n-1, self.n, device="cuda"), indexing='ij')
 
+
+
     def __edges_back(self):
         r=self.cfg.PATCH_LIFETIME
         t0 = self.M * max((self.n - 1), 0)
         t1 = self.M * max((self.n - 0), 0)
         return flatmeshgrid(torch.arange(t0, t1, device="cuda"),
             torch.arange(max(self.n-r, 0), self.n, device="cuda"), indexing='ij')
+
+
 
     #def __call__(self, tstamp, image, intrinsics):
     def __call__(self, tstamp, image, disp=None, intrinsics=None):
@@ -425,11 +436,11 @@ class DPVO:
                 tvec_qvec = self.poses[self.n-1]
                 self.pg.poses_[self.n] = tvec_qvec
 
-        # TODO better depth initialization
-        patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
-        if self.is_initialized:
-            s = torch.median(self.pg.patches_[self.n-3:self.n,:,2])
-            patches[:,:,2] = s
+        # # TODO better depth initialization
+        # patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
+        # if self.is_initialized:
+        #     s = torch.median(self.pg.patches_[self.n-3:self.n,:,2])
+        #     patches[:,:,2] = s
 
         self.pg.patches_[self.n] = patches
 

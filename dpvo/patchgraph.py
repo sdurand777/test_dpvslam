@@ -53,6 +53,8 @@ class PatchGraph:
         self.weight_inac = torch.zeros(1, 0, 2, dtype=torch.long, device="cuda")
         self.target_inac = torch.zeros(1, 0, 2, dtype=torch.long, device="cuda")
 
+
+
     def edges_loop(self):
         """ Adding edges from old patches to new frames """
         lc_range = self.cfg.MAX_EDGE_AGE
@@ -81,6 +83,8 @@ class PatchGraph:
         kk = ii.mul(self.M) + torch.arange(self.M, device=ii.device)
         return kk.flatten(), jj.flatten()
 
+
+
     def normalize(self):
         """ normalize depth and poses """
         s = self.patches_[:self.n,:,2].mean()
@@ -93,6 +97,8 @@ class PatchGraph:
         points = pops.point_cloud(SE3(self.poses), self.patches[:, :self.m], self.intrinsics, self.ix[:self.m])
         points = (points[...,1,1,:3] / points[...,1,1,3:]).reshape(-1, 3)
         self.points_[:len(points)] = points[:]
+
+
 
     @property
     def poses(self):

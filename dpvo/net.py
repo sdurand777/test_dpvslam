@@ -118,25 +118,28 @@ class Patchifier(nn.Module):
         b, n, c, h, w = fmap.shape
         P = self.patch_size
 
-        # bias patch selection towards regions with high gradient
-        if centroid_sel_strat == 'GRADIENT_BIAS':
-            g = self.__image_gradient(images)
-            x = torch.randint(1, w-1, size=[n, 3*patches_per_image], device="cuda")
-            y = torch.randint(1, h-1, size=[n, 3*patches_per_image], device="cuda")
+        # # bias patch selection towards regions with high gradient
+        # if centroid_sel_strat == 'GRADIENT_BIAS':
+        #     g = self.__image_gradient(images)
+        #     x = torch.randint(1, w-1, size=[n, 3*patches_per_image], device="cuda")
+        #     y = torch.randint(1, h-1, size=[n, 3*patches_per_image], device="cuda")
+        #
+        #     coords = torch.stack([x, y], dim=-1).float()
+        #     g = altcorr.patchify(g[0,:,None], coords, 0).view(n, 3 * patches_per_image)
+        #     
+        #     ix = torch.argsort(g, dim=1)
+        #     x = torch.gather(x, 1, ix[:, -patches_per_image:])
+        #     y = torch.gather(y, 1, ix[:, -patches_per_image:])
+        #
+        # elif centroid_sel_strat == 'RANDOM':
+        #     x = torch.randint(1, w-1, size=[n, patches_per_image], device="cuda")
+        #     y = torch.randint(1, h-1, size=[n, patches_per_image], device="cuda")
+        #
+        # else:
+        #     raise NotImplementedError(f"Patch centroid selection not implemented: {centroid_sel_strat}")
+        x = torch.randint(1, w-1, size=[n, patches_per_image], device="cuda")
+        y = torch.randint(1, h-1, size=[n, patches_per_image], device="cuda")
 
-            coords = torch.stack([x, y], dim=-1).float()
-            g = altcorr.patchify(g[0,:,None], coords, 0).view(n, 3 * patches_per_image)
-            
-            ix = torch.argsort(g, dim=1)
-            x = torch.gather(x, 1, ix[:, -patches_per_image:])
-            y = torch.gather(y, 1, ix[:, -patches_per_image:])
-
-        elif centroid_sel_strat == 'RANDOM':
-            x = torch.randint(1, w-1, size=[n, patches_per_image], device="cuda")
-            y = torch.randint(1, h-1, size=[n, patches_per_image], device="cuda")
-
-        else:
-            raise NotImplementedError(f"Patch centroid selection not implemented: {centroid_sel_strat}")
 
         coords = torch.stack([x, y], dim=-1).float()
         imap = altcorr.patchify(imap[0], coords, 0).view(b, -1, DIM, 1, 1)

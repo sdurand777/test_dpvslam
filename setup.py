@@ -24,7 +24,8 @@ setup(
                 ]
             }),
         CUDAExtension('cuda_ba',
-            sources=['dpvo/fastba/ba.cpp', 'dpvo/fastba/ba_cuda.cu', 'dpvo/fastba/block_e.cu'],
+            #sources=['dpvo/fastba/ba.cpp', 'dpvo/fastba/ba_cuda.cu', 'dpvo/fastba/block_e.cu'],
+            sources=['dpvo/fastba/ba.cpp', 'dpvo/fastba/ba_cuda.cu'],
             extra_compile_args={
                 'cxx':  ['-O3'], 
                 'nvcc': ['-O3',
