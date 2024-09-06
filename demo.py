@@ -34,10 +34,13 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
 
     reader.start()
 
+    disp = None
+
     while 1:
         (t, image, intrinsics) = queue.get()
         if t < 0: break
 
+        print("Frame : ",t)
         image = torch.from_numpy(image).permute(2,0,1).cuda()
         intrinsics = torch.from_numpy(intrinsics).cuda()
 
@@ -46,7 +49,7 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
             slam = DPVO(cfg, network, ht=H, wd=W, viz=viz)
 
         with Timer("SLAM", enabled=timeit):
-            slam(t, image, intrinsics)
+            slam(t, image, disp, intrinsics)
 
     reader.join()
 

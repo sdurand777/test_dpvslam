@@ -8,6 +8,7 @@ import glob
 
 import torch
 from torch.nn import functional as F
+import time
 
 def image_stream(queue, imagedir, calib, stride, skip=0):
     """ image generator """
@@ -356,32 +357,87 @@ def video_stream(queue, imagedir, calib, stride, skip=0):
 
     t = 0
 
+    # Lire les frames à ignorer
     for _ in range(skip):
-        ret, image = cap.read()
+        cap.read()
 
-    while True:
-        # Capture frame-by-frame
-        for _ in range(stride):
-            ret, image = cap.read()
-            # if frame is read correctly ret is True
-            if not ret:
+    try:
+        while True:
+            # Vérifier si la queue est pleine avant de traiter la prochaine frame
+            while queue.full():
+                #print("Queue pleine, attente pour la mise en file.")
+                time.sleep(0.1)  # Attendre un court instant avant de réessayer
+
+            for _ in range(stride):
+                ret, image = cap.read()
+                if not ret:
+                    print("Fin de la vidéo ou erreur de lecture.")
+                    queue.put((-1, None, None))
+                    return
+
+            if image is None:
+                print("Image lue est None, fin du processus.")
                 break
 
-        if not ret:
-            break
+            if len(calib) > 4:
+                image = cv2.undistort(image, K, calib[4:])
 
-        if len(calib) > 4:
-            image = cv2.undistort(image, K, calib[4:])
+            image = cv2.resize(image, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+            h, w, _ = image.shape
+            
+            #print("image shape : ", image.shape)
 
-        image = cv2.resize(image, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
-        h, w, _ = image.shape
-        image = image[:h-h%16, :w-w%16]
+            image = image[:h - h % 16, :w - w % 16]
 
-        intrinsics = np.array([fx*.5, fy*.5, cx*.5, cy*.5])
-        queue.put((t, image, intrinsics))
+            intrinsics = np.array([fx * 0.5, fy * 0.5, cx * 0.5, cy * 0.5])
 
-        t += 1
+            # Ajouter la frame à la queue
+            queue.put((t, image, intrinsics))
+            #print(f"Frame {t} ajoutée à la queue.")
+            t += 1
 
-    queue.put((-1, image, intrinsics))
-    cap.release()
+    except Exception as e:
+        print(f"Erreur lors de la lecture ou du traitement de la vidéo: {e}")
+
+    finally:
+        # Envoyer le signal de fin si la queue n'est pas pleine
+        if not queue.full():
+            queue.put((-1, None, None))
+        else:
+            print("Queue pleine, attente pour l'envoi du signal de fin.")
+            while queue.full():
+                time.sleep(0.1)  # Attendre un court instant avant de réessayer
+            queue.put((-1, None, None))
+        
+        cap.release()
+        print("Processus video_stream terminé.")
+
+    # for _ in range(skip):
+    #     ret, image = cap.read()
+    #
+    # while True:
+    #     # Capture frame-by-frame
+    #     for _ in range(stride):
+    #         ret, image = cap.read()
+    #         # if frame is read correctly ret is True
+    #         if not ret:
+    #             break
+    #
+    #     if not ret:
+    #         break
+    #
+    #     if len(calib) > 4:
+    #         image = cv2.undistort(image, K, calib[4:])
+    #
+    #     image = cv2.resize(image, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_AREA)
+    #     h, w, _ = image.shape
+    #     image = image[:h-h%16, :w-w%16]
+    #
+    #     intrinsics = np.array([fx*.5, fy*.5, cx*.5, cy*.5])
+    #     queue.put((t, image, intrinsics))
+    #
+    #     t += 1
+    #
+    # queue.put((-1, image, intrinsics))
+    # cap.release()
 
