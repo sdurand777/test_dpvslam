@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from einops import asnumpy, reduce, repeat
+import einops
 
 from . import projective_ops as pops
 from .lietorch import SE3
@@ -55,6 +56,7 @@ class PatchGraph:
 
 
 
+    # loop closure based on deep learning
     def edges_loop(self):
         """ Adding edges from old patches to new frames """
         lc_range = self.cfg.MAX_EDGE_AGE
@@ -63,24 +65,100 @@ class PatchGraph:
         if l <= 0:
             return torch.empty(2, 0, dtype=torch.long, device='cuda')
 
+        # on a l >= 1 donc on a plus de frames self.n que la removal_window la loop closure est au de la de removal window et en dessous de 1000 (lc_range)
+        # config
+#         import pdb; pdb.set_trace()
+
         # create candidate edges
         jj, kk = flatmeshgrid(
             torch.arange(self.n - self.cfg.GLOBAL_OPT_FREQ, self.n - self.cfg.KEYFRAME_INDEX, device="cuda"),
             torch.arange(max(l - lc_range, 0) * self.M, l * self.M, device="cuda"), indexing='ij')
         ii = self.ix[kk]
 
+        # compute candidate edges
+#         import pdb; pdb.set_trace()
+
         # Remove edges which have too large flow magnitude
         flow_mg, val = pops.flow_mag(SE3(self.poses), self.patches[...,1,1].view(1,-1,3,1,1), self.intrinsics, ii, jj, kk, beta=0.5)
-        flow_mg_sum = reduce(flow_mg * val, '1 (fl M) 1 1 -> fl', 'sum', M=self.M).float()
-        num_val = reduce(val, '1 (fl M) 1 1 -> fl', 'sum', M=self.M).clamp(min=1)
+
+        # # compute raw flow mag
+#         # import pdb; pdb.set_trace()
+
+        # # Alternative to einops.reduce for summing across a dimension
+        # def reduce_sum(tensor, dim):
+        #     return tensor.sum(dim=dim)
+        #
+        # tensor = np.array([[1, 2], [3, 4]], dtype=np.float32)
+        # tensor = torch.tensor(tensor)  # Convert numpy array to PyTorch tensor
+        # # Réduction en utilisant einops.reduce (moyenne sur la première dimension)
+        # #result = reduce(tensor, 'b c -> c', 'mean')
+        # result = tensor.mean(dim=0)  # mean across dimension 0
+
+
+        # # version original
+#         # import pdb; pdb.set_trace()
+        # flow_mg_sum = einops.reduce(flow_mg * val, '1 (fl M) 1 1 -> fl', 'sum', M=self.M).float()
+
+        # version san einops
+#         import pdb; pdb.set_trace()
+        flow_mg_mult = flow_mg * val
+        reshaped_tensor = flow_mg_mult.view(1, -1, self.M, 1, 1)  # Shape (1, 11, 96, 1, 1)
+        flow_mg_sum = reshaped_tensor.sum(dim=2)  # Réduit la dimension M
+        flow_mg_sum = flow_mg_sum.squeeze()  # Pour obtenir une forme (11,)
+   
+
+        # # compute cummulated flow ?
+#         # import pdb; pdb.set_trace()
+        # num_val = einops.reduce(val, '1 (fl M) 1 1 -> fl', 'sum', M=self.M).clamp(min=1)
+
+
+        # version sans einops
+#         import pdb; pdb.set_trace()
+        reshaped_val = val.view(1, -1, self.M, 1, 1)  # Shape (1, 11, 96, 1, 1)
+        num_val = reshaped_val.sum(dim=2)  # Réduit la dimension M, forme finale (1, 11, 1, 1)
+        num_val = num_val.clamp(min=1)
+        num_val = num_val.squeeze()
+
         flow_mag = torch.where(num_val > (self.M * 0.75), flow_mg_sum / num_val, torch.inf)
 
+
+        # compute flow mag
+#         import pdb; pdb.set_trace()
+        
         mask = (flow_mag < self.cfg.BACKEND_THRESH)
-        es = reduce_edges(asnumpy(flow_mag[mask]), asnumpy(ii[::self.M][mask]), asnumpy(jj[::self.M][mask]), max_num_edges=1000, nms=1)
+
+        # compute flow mag
+#         import pdb; pdb.set_trace()
+ 
+        #es = reduce_edges(asnumpy(flow_mag[mask]), asnumpy(ii[::self.M][mask]), asnumpy(jj[::self.M][mask]), max_num_edges=1000, nms=1)
+        es = reduce_edges(  flow_mag[mask].detach().cpu().numpy(), 
+                            ii[::self.M][mask].detach().cpu().numpy(), 
+                            jj[::self.M][mask].detach().cpu().numpy(), 
+                            max_num_edges=1000, 
+                            nms=1)
+        
+        # compute mask to keep relevant edges
+#         import pdb; pdb.set_trace()
 
         edges = torch.as_tensor(es, device=ii.device)
-        ii, jj = repeat(edges, 'E ij -> ij E M', M=self.M, ij=2)
+
+        #ii, jj = repeat(edges, 'E ij -> ij E M', M=self.M, ij=2)
+
+# Transpose edges to get shape (2, E)
+        edges_transposed = edges.T  # (2, E)
+
+# Expand the transposed tensor to have the third dimension M
+        edges_expanded = edges_transposed.unsqueeze(-1).expand(-1, -1, self.M)  # (2, E, M)
+
+# Split the result into ii and jj along the first dimension (which corresponds to ij)
+        ii, jj = edges_expanded[0], edges_expanded[1] 
+
+
         kk = ii.mul(self.M) + torch.arange(self.M, device=ii.device)
+        
+        # check new indices
+#         import pdb; pdb.set_trace()
+
         return kk.flatten(), jj.flatten()
 
 

@@ -410,6 +410,7 @@ class DPVO:
 
         image = 2 * (image[None,None] / 255.0) - 0.5
         
+        # patchifier
         with autocast(enabled=self.cfg.MIXED_PRECISION):
             fmap, gmap, imap, patches, _, clr = \
                 self.network.patchify(  image,
@@ -430,6 +431,7 @@ class DPVO:
         self.pg.index_[self.n + 1] = self.n + 1
         self.pg.index_map_[self.n + 1] = self.m + self.M
 
+        # motion model
         if self.n > 1:
             if self.cfg.MOTION_MODEL == 'DAMPED_LINEAR':
                 P1 = SE3(self.pg.poses_[self.n-1])
@@ -446,7 +448,8 @@ class DPVO:
                 tvec_qvec = self.poses[self.n-1]
                 self.pg.poses_[self.n] = tvec_qvec
 
-        # TODO better depth initialization
+
+        # Depth initialisation based on median
         patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
         if self.is_initialized:
             s = torch.median(self.pg.patches_[self.n-3:self.n,:,2])
@@ -460,6 +463,7 @@ class DPVO:
         self.fmap1_[:, self.n % self.mem] = F.avg_pool2d(fmap[0], 1, 1)
         self.fmap2_[:, self.n % self.mem] = F.avg_pool2d(fmap[0], 4, 4)
 
+        # Initialisation
         self.counter += 1        
         if self.n > 0 and not self.is_initialized:
             if self.motion_probe() < 2.0:
@@ -469,6 +473,7 @@ class DPVO:
         self.n += 1
         self.m += self.M
 
+        # loop closure
         if self.cfg.LOOP_CLOSURE:
             if self.n - self.last_global_ba >= self.cfg.GLOBAL_OPT_FREQ:
                 """ Add loop closure factors """
@@ -484,6 +489,7 @@ class DPVO:
         if self.n == 8 and not self.is_initialized:
             self.is_initialized = True
 
+            # global optimization after initialisation
             for itr in range(12):
                 self.update()
 
@@ -491,6 +497,7 @@ class DPVO:
             self.update()
             self.keyframe()
 
+        # classic loop closure based on ORB descriotors
         if self.cfg.CLASSIC_LOOP_CLOSURE:
             self.long_term_lc.attempt_loop_closure(self.n)
             self.long_term_lc.lc_callback()

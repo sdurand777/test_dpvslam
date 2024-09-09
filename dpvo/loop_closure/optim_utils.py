@@ -20,8 +20,13 @@ def SE3_to_Sim3(x: pp.SE3):
 def _format(es):
     return np.asarray(es, dtype=np.int64).reshape((-1, 2))[1:]
 
+
+# called in patchgraph in edges_loop
 @nb.njit(cache=True)
 def reduce_edges(flow_mag, ii, jj, max_num_edges, nms):
+    # # init 
+    # import pdb; pdb.set_trace()
+
     es = [(-1, -1)]
 
     if ii.size == 0:
@@ -31,6 +36,10 @@ def reduce_edges(flow_mag, ii, jj, max_num_edges, nms):
     ignore_lookup = np.zeros((Ni, Nj), dtype=nb.bool_)
 
     idxs = np.argsort(flow_mag)
+
+    # # indices for edges
+    # import pdb; pdb.set_trace()
+
     for idx in idxs: # edge index
 
         if len(es) > max_num_edges:
@@ -58,6 +67,7 @@ def reduce_edges(flow_mag, ii, jj, max_num_edges, nms):
                 ignore_lookup[i1, j] = True
 
     return _format(es)
+
 
 
 

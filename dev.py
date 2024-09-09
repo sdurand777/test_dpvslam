@@ -1,8 +1,8 @@
 
-# from pycallgraph2 import PyCallGraph
-# from pycallgraph2.output import GraphvizOutput
-# from pycallgraph2 import Config
-# from pycallgraph2 import GlobbingFilter
+from pycallgraph2 import PyCallGraph
+from pycallgraph2.output import GraphvizOutput
+from pycallgraph2 import Config
+from pycallgraph2 import GlobbingFilter
 
 import os
 from multiprocessing import Process, Queue
@@ -64,7 +64,7 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
             print("Frame : ", t)
 
             """ stop dans la loop """
-            if DEBUG: import pdb; pdb.set_trace()
+#             if DEBUG: import pdb; pdb.set_trace()
 
             image = torch.from_numpy(image).permute(2, 0, 1).cuda()
             intrinsics = torch.from_numpy(intrinsics).cuda()
@@ -155,60 +155,66 @@ if __name__ == '__main__':
     print(cfg)
 
 
-    run(cfg, args.network, args.imagedir, args.calib, args.stride, args.skip, args.viz, args.timeit)
-    # try:
-    #     config = Config()
-    #     
-    #     #config.trace_filter = GlobbingFilter(exclude=['pycallgraph2.*'])
-    #     config.trace_filter = GlobbingFilter(
-    #             #include=['dpvo.net.*'],  # Inclure explicitement le module torch
-    #             exclude=['numpy.*', 
-    #                      'pdb.*',
-    #                      'pycallgraph2.*' ,
-    #                      '_*', 
-    #                      'shutil', 
-    #                      'os', 
-    #                      're', 
-    #                      'sys', 
-    #                      'module_from_spec.*',
-    #                      'module_from_spec',
-    #                      'SourceFileLoader.*',
-    #                      'FileFinder.*',
-    #                      'find_spec', 
-    #                      '<listcomp>',
-    #                      '<genexpr>',
-    #                      'spec_from_file_location',
-    #                      'cache_from_source',
-    #                      'cb',
-    #                      '<lambda>',
-    #                      'VFModule.*',
-    #                      'ModuleSpec.*',
-    #                      'dpvo.lietorch.*',
-    #                      'dpvo.utils.*',
-    #                      'dpvo.blocks.*',
-    #                      'dpvo.altcorr.*',
-    #                      'dpvo.projective_ops.*',
-    #                      'dpvo.extractor.*'])
-    #
-    #     graphviz = GraphvizOutput()
-    #     #graphviz.output_file = 'tmp.pdf'
-    #     graphviz.output_file = 'callgraph.pdf'
-    #     graphviz.output_type = 'pdf'  # Spécifier le format de sortie en PDF
-    #
-    #     # graphviz.output_file = 'callgraph.png'
-    #     # graphviz.output_type = 'png'  # Spécifier le format de sortie en PDF
-    #
-    #     # Générer le graphe d'appel
-    #     with PyCallGraph(output=graphviz, config=config):
-    #         run(cfg, args.network, args.imagedir, args.calib, args.stride, args.skip, args.viz, args.timeit)
-    # except KeyboardInterrupt:
-    #     print("Programme interrompu par l'utilisateur.")
-    # except Exception as e:
-    #     print(f"Erreur inattendue : {e}")
-    # finally:
-    #     print("fin du programme")
-    #     #sys.exit(0)        
-    #     os._exit(0)  # Utilisé pour forcer la fermeture
+#    run(cfg, args.network, args.imagedir, args.calib, args.stride, args.skip, args.viz, args.timeit)
+    try:
+        config = Config()
+        
+        #config.trace_filter = GlobbingFilter(exclude=['pycallgraph2.*'])
+        config.trace_filter = GlobbingFilter(
+                #include=['dpvo.net.*'],  # Inclure explicitement le module torch
+                exclude=['numpy.*', 
+                         'pdb.*',
+                         'pycallgraph2.*' ,
+                         '_*', 
+                         'shutil', 
+                         'os', 
+                         're', 
+                         'sys', 
+                         'module_from_spec.*',
+                         'module_from_spec',
+                         'SourceFileLoader.*',
+                         'FileFinder.*',
+                         'find_spec', 
+                         '<listcomp>',
+                         '<genexpr>',
+                         'spec_from_file_location',
+                         'cache_from_source',
+                         'cb',
+                         '<lambda>',
+                         'VFModule.*',
+                         'ModuleSpec.*',
+                         'dpvo.lietorch.*',
+                         'dpvo.utils.*',
+                         'dpvo.blocks.*',
+                         'dpvo.altcorr.*',
+                         'dpvo.projective_ops.*',
+                         'dpvo.extractor.*',
+                         'einops.*',
+                         'einops.reduce',
+                         'importlib.*',
+                         'PatchGraph.*',
+                         'pg.*',
+                         'PatchGraph.reduce'])
+
+        graphviz = GraphvizOutput()
+        #graphviz.output_file = 'tmp.pdf'
+        graphviz.output_file = 'callgraph.pdf'
+        graphviz.output_type = 'pdf'  # Spécifier le format de sortie en PDF
+
+        # graphviz.output_file = 'callgraph.png'
+        # graphviz.output_type = 'png'  # Spécifier le format de sortie en PDF
+
+        # Générer le graphe d'appel
+        with PyCallGraph(output=graphviz, config=config):
+            run(cfg, args.network, args.imagedir, args.calib, args.stride, args.skip, args.viz, args.timeit)
+    except KeyboardInterrupt:
+        print("Programme interrompu par l'utilisateur.")
+    except Exception as e:
+        print(f"Erreur inattendue : {e}")
+    finally:
+        print("fin du programme")
+        #sys.exit(0)        
+        os._exit(0)  # Utilisé pour forcer la fermeture
 
  
 
