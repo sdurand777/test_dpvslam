@@ -110,13 +110,26 @@ class Patchifier(nn.Module):
 
 
     #def forward(self, images, patches_per_image=80, disps=None, centroid_sel_strat='RANDOM', return_color=False):
-    def forward(self, images, disps = None, patches_per_image=80, centroid_sel_strat='RANDOM', return_color=False):
+    def forward(self, images, disps = None, patches_per_image=80, centroid_sel_strat='RANDOM', return_color=False, stereo=False):
         """ extract patches from input images """
 
         #import pdb; pdb.set_trace()
 
-        fmap = self.fnet(images) / 4.0
-        imap = self.inet(images) / 4.0
+        # fmap = self.fnet(images) / 4.0
+        # imap = self.inet(images) / 4.0
+
+
+        # extraction des features
+        if stereo:
+            fmap = self.fnet(images[:,:,0]) / 4.0 # [1, 1; 128, 132, 240]
+            fmap_right = self.fnet(images[:,:,1]) / 4.0 # [1, 1; 128, 132, 240]
+            # only left context 
+            imap = self.inet(images[:,:,0]) / 4.0 # {1, 1, 384; 132, 240}
+        else:
+            fmap = self.fnet(images) / 4.0 # [1, 1; 128, 132, 240]
+            imap = self.inet(images) / 4.0 # {1, 1, 384; 132, 240}
+
+
 
         b, n, c, h, w = fmap.shape
         P = self.patch_size
@@ -149,7 +162,11 @@ class Patchifier(nn.Module):
         gmap = altcorr.patchify(fmap[0], coords, P//2).view(b, -1, 128, P, P)
 
         if return_color:
-            clr = altcorr.patchify(images[0], 4*(coords + 0.5), 0).view(b, -1, 3)
+            if stereo:
+                # color only on left
+                clr = altcorr.patchify(images[0,:,0], 4*(coords + 0.5), 0).view(b, -1, 3)
+            else:
+                clr = altcorr.patchify(images[0], 4*(coords + 0.5), 0).view(b, -1, 3)
 
         #import pdb; pdb.set_trace()
 
@@ -188,7 +205,10 @@ class Patchifier(nn.Module):
         index = index.repeat(1, patches_per_image).reshape(-1)
 
         if return_color:
-            return fmap, gmap, imap, patches, index, clr
+            if stereo:
+                return fmap, gmap, imap, patches, index, clr, fmap_right
+            else:
+                return fmap, gmap, imap, patches, index, clr
 
         return fmap, gmap, imap, patches, index
 

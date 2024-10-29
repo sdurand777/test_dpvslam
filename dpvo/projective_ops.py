@@ -50,7 +50,7 @@ def proj(X, intrinsics, depth=False):
     return torch.stack([x, y], dim=-1)
 
 
-def transform(poses, patches, intrinsics, ii, jj, kk, depth=False, valid=False, jacobian=False, tonly=False):
+def transform(poses, patches, intrinsics, ii, jj, kk, depth=False, valid=False, jacobian=False, tonly=False, stereo=False):
     """ projective transform """
 
     # backproject
@@ -61,6 +61,10 @@ def transform(poses, patches, intrinsics, ii, jj, kk, depth=False, valid=False, 
 
     if tonly:
         Gij[...,3:] = torch.as_tensor([0,0,0,1], device=Gij.device)
+
+    # gestion cas stereo 
+    if stereo:
+        Gij.data[:,ii==jj] = torch.as_tensor([-0.15, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], device="cuda")
 
     X1 = Gij[:,:,None,None] * X0
 

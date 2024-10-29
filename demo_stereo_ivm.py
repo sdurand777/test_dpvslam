@@ -11,9 +11,11 @@ from evo.tools import file_interface
 from dpvo.config import cfg
 from dpvo.dpvo import DPVO
 from dpvo.plot_utils import plot_trajectory, save_output_for_COLMAP, save_ply
-from dpvo.stream import image_stream, video_stream, image_ivm_300_stream
+#from dpvo.stream import image_stream, video_stream, image_ivm_300_stream
 from dpvo.utils import Timer
 
+
+from dpvo.stream import image_stream_stereo_ivm
 
 from plyfile import PlyElement, PlyData
 
@@ -23,7 +25,7 @@ import time
 
 SKIP = 0
 
-STEREO = False
+STEREO = True
 
 def show_image(image, t=0):
     image = image.permute(1, 2, 0).cpu().numpy()
@@ -36,13 +38,7 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
 
     slam = None
     queue = Queue(maxsize=8)
-
-    if os.path.isdir(imagedir):
-        reader = Process(target=image_ivm_300_stream, args=(queue, imagedir, stride, skip))
-    else:
-        reader = Process(target=video_stream, args=(queue, imagedir, calib, stride, skip))
-
-    reader.start()
+    disps = None
 
     imagedir_img = imagedir+"/left/"
     number_of_images = len([file for file in os.listdir(imagedir_img) if file.endswith('.JPG')])
@@ -51,9 +47,13 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
 
     counter = 0
 
+    reader = Process(target=image_stream_stereo_ivm, args=(queue, imagedir, calib, stride, skip))
+    reader.start()
+
+
     while 1:
-       # (t, image, intrinsics) = queue.get()
-        (t, image, disp_sens, intrinsics) = queue.get(timeout=10)
+        (t, image, intrinsics) = queue.get()
+        #(t, image, disps, intrinsics) = queue.get(timeout=10)
         if t < 0: break
 
         if t >= number_of_images-10:
@@ -71,16 +71,19 @@ def run(cfg, network, imagedir, calib, stride=1, skip=0, viz=False, timeit=False
         intrinsics = intrinsics.cuda()
 
         if slam is None:
-            _, H, W = image.shape
-            slam = DPVO(cfg, network, ht=H, wd=W, viz=viz)
+            slam = DPVO(cfg, network, ht=image.shape[2], wd=image.shape[3], viz=viz, stereo=STEREO)
 
+        # if slam is None:
+        #
+        #     _, H, W = image.shape
+        #     slam = DPVO(cfg, network, ht=H, wd=W, viz=viz, stereo=STEREO)
 
         image = image.cuda()
 
         intrinsics = intrinsics.cuda()
 
         with Timer("SLAM", enabled=timeit):
-            slam(t, image, disp_sens, intrinsics)
+            slam(t, image, disps, intrinsics)
 
 
 # Extract the translation vectors (first three elements)

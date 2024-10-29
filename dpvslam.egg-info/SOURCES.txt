@@ -12,11 +12,14 @@ dpvo/patchgraph.py
 dpvo/plot_utils.py
 dpvo/projective_ops.py
 dpvo/stream.py
+dpvo/stream_old.py
 dpvo/utils.py
 dpvo/altcorr/__init__.py
 dpvo/altcorr/correlation.cpp
 dpvo/altcorr/correlation.py
 dpvo/altcorr/correlation_kernel.cu
+dpvo/altcorr_old/__init__.py
+dpvo/altcorr_old/correlation.py
 dpvo/data_readers/__init__.py
 dpvo/data_readers/augmentation.py
 dpvo/data_readers/base.py
@@ -28,7 +31,8 @@ dpvo/fastba/__init__.py
 dpvo/fastba/ba.cpp
 dpvo/fastba/ba.py
 dpvo/fastba/ba_cuda.cu
-dpvo/fastba/block_e.cu
+dpvo/fastba_new/__init__.py
+dpvo/fastba_new/ba.py
 dpvo/fastba_old/__init__.py
 dpvo/fastba_old/ba.py
 dpvo/lietorch/__init__.py

@@ -19,7 +19,7 @@ Id = SE3.Identity(1, device="cuda")
 
 class DPVO:
 
-    def __init__(self, cfg, network, ht=480, wd=640, viz=False):
+    def __init__(self, cfg, network, ht=480, wd=640, viz=False, stereo=False):
         self.cfg = cfg
         self.load_weights(network)
         self.is_initialized = False
@@ -69,11 +69,22 @@ class DPVO:
         if self.cfg.CLASSIC_LOOP_CLOSURE:
             self.load_long_term_loop_closure()
 
+
         self.fmap1_ = torch.zeros(1, self.mem, 128, ht // 1, wd // 1, **kwargs)
         self.fmap2_ = torch.zeros(1, self.mem, 128, ht // 4, wd // 4, **kwargs)
 
+        # for right frames
+        self.fmap1_right = torch.zeros(1, self.mem, 128, ht // 1, wd // 1, **kwargs)
+        self.fmap2_right = torch.zeros(1, self.mem, 128, ht // 4, wd // 4, **kwargs)
+
+
         # feature pyramid
         self.pyramid = (self.fmap1_, self.fmap2_)
+
+        # pyramid right
+        self.pyramid_right = (self.fmap1_right, self.fmap2_right)
+
+        self.stereo = stereo
 
         self.viewer = None
         if viz:
@@ -197,19 +208,96 @@ class DPVO:
         # Poses: x y z qx qy qz qw
         return poses, tstamps
 
-    def corr(self, coords, indicies=None):
-        """ local correlation volume """
-        ii, jj = indicies if indicies is not None else (self.pg.kk, self.pg.jj)
-        ii1 = ii % (self.M * self.pmem)
-        jj1 = jj % (self.mem)
-        corr1 = altcorr.corr(self.gmap, self.pyramid[0], coords / 1, ii1, jj1, 3)
-        corr2 = altcorr.corr(self.gmap, self.pyramid[1], coords / 4, ii1, jj1, 3)
+    def corr(self, coords, indicies=None, stereo=False):
+
+        if stereo:
+            # on recupere les indices
+            ii, jj, kk = indicies if indicies is not None else (self.pg.ii, self.pg.jj, self.pg.kk)
+            ii1 = ii % (self.mem)
+            jj1 = jj % (self.mem)
+            kk1 = kk % (self.M * self.mem)
+
+            #import pdb; pdb.set_trace()
+
+            corr1 = altcorr.corr_stereo(
+                                        self.gmap, 
+                                        self.pyramid[0], 
+                                        self.pyramid_right[0], 
+                                        coords / 1, 
+                                        ii1, 
+                                        jj1, 
+                                        kk1, 
+                                        3)
+            corr1 = corr1[0]
+            # level 2 divise par 4
+            # corr2 shape [1, 96, 7 ,7, 3, 3]
+            corr2 = altcorr.corr_stereo(
+                                        self.gmap, 
+                                        self.pyramid[1], 
+                                        self.pyramid_right[1], 
+                                        coords / 4, 
+                                        ii1, 
+                                        jj1, 
+                                        kk1, 
+                                        3)
+            corr2 = corr2[0]
+
+            #corr2 = altcorr.corr(self.gmap, self.pyramid[1], coords / 4, kk1, jj1, 3)
+        else:
+            # on recupere les indices
+            ii, jj = indicies if indicies is not None else (self.pg.kk, self.pg.jj)
+            # on utilise la memoire circulaire self.mem pour recuperer les bons indices sur les 32 stockes
+            # indices des patches
+            ii1 = ii % (self.M * self.mem)
+            # indices de la frame sur laquelle reprojete les patches
+            jj1 = jj % (self.mem)
+
+#             # recuperer les data entrees pour rejouer correlation
+#             if len(ii) == 6144:
+#                 my_values = {
+#                     'gmap': self.gmap.to('cpu'),
+#                     'pyramid': self.pyramid[0].to('cpu'),
+#                     'coords': coords.to('cpu'),
+#                     'kk1': ii1.to('cpu'),
+#                     'jj1': jj1.to('cpu'),
+#                 }
+#
+#                 class Container(torch.nn.Module):
+#                     def __init__(self, my_values):
+#                         super().__init__()
+#                         for key in my_values:
+#                             setattr(self, key, my_values[key])
+#
+# # Save arbitrary values supported by TorchScript
+# # https://pytorch.org/docs/master/jit.html#supported-type
+#                 container = torch.jit.script(Container(my_values))
+#                 container.save("container_corr_dpvo.pt")
+#
+#                 import pdb; pdb.set_trace()
+
+            # on recupere directement les correlations dans la pyramide
+            # level 1 pleine taille 132 240
+            # corr1 shape [1, 96, 7 ,7, 3, 3]
+            corr1 = altcorr.corr(self.gmap, self.pyramid[0], coords / 1, ii1, jj1, 3)
+            # level 2 divise par 4
+            # corr2 shape [1, 96, 7 ,7, 3, 3]
+            corr2 = altcorr.corr(self.gmap, self.pyramid[1], coords / 4, ii1, jj1, 3)
+        # on stack tout
         return torch.stack([corr1, corr2], -1).view(1, len(ii), -1)
 
-    def reproject(self, indicies=None):
+
+        # """ local correlation volume """
+        # ii, jj = indicies if indicies is not None else (self.pg.kk, self.pg.jj)
+        # ii1 = ii % (self.M * self.pmem)
+        # jj1 = jj % (self.mem)
+        # corr1 = altcorr.corr(self.gmap, self.pyramid[0], coords / 1, ii1, jj1, 3)
+        # corr2 = altcorr.corr(self.gmap, self.pyramid[1], coords / 4, ii1, jj1, 3)
+        # return torch.stack([corr1, corr2], -1).view(1, len(ii), -1)
+
+    def reproject(self, indicies=None, stereo=False):
         """ reproject patch k from i -> j """
         (ii, jj, kk) = indicies if indicies is not None else (self.pg.ii, self.pg.jj, self.pg.kk)
-        coords = pops.transform(SE3(self.poses), self.patches, self.intrinsics, ii, jj, kk)
+        coords = pops.transform(SE3(self.poses), self.patches, self.intrinsics, ii, jj, kk, stereo=stereo)
         return coords.permute(0, 1, 4, 2, 3).contiguous()
 
     def append_factors(self, ii, jj):
@@ -334,10 +422,10 @@ class DPVO:
 
         # reprojection pour update les target pour le BA
         with Timer("other", enabled=self.enable_timing):
-            coords = self.reproject()
+            coords = self.reproject(stereo=self.stereo)
 
             with autocast(enabled=True):
-                corr = self.corr(coords)
+                corr = self.corr(coords, stereo=self.stereo)
                 ctx = self.imap[:, self.pg.kk % (self.M * self.pmem)]
                 self.pg.net, (delta, weight, _) = \
                     self.network.update(self.pg.net, ctx, corr, None, self.pg.ii, self.pg.jj, self.pg.kk)
@@ -357,6 +445,8 @@ class DPVO:
                 else:
                     t0 = self.n - self.cfg.OPTIMIZATION_WINDOW if self.is_initialized else 1
                     t0 = max(t0, 1)
+
+                    import pdb; pdb.set_trace()
 
                     fastba.BA(self.poses, self.patches, self.intrinsics, 
                         target, weight, lmbda, self.pg.ii, self.pg.jj, self.pg.kk, t0, self.n, M=self.M, iterations=2, eff_impl=False)
@@ -405,19 +495,48 @@ class DPVO:
         if (self.n+1) >= self.N:
             raise Exception(f'The buffer size is too small. You can increase it using "--opts BUFFER_SIZE={self.N*2}"')
 
-        if self.viewer is not None:
-            self.viewer.update_image(image.contiguous())
+        # if self.viewer is not None:
+        #     self.viewer.update_image(image.contiguous())
 
-        image = 2 * (image[None,None] / 255.0) - 0.5
+
+        if self.viewer is not None:
+            if self.stereo:
+                self.viewer.update_image(image[0])
+            else:
+                self.viewer.update_image(image)
+
+
+        # post traitement image
+        if self.stereo:
+            # normalisation image avant patchifier
+            image = 2 * (image[None,None] / 255.0) - 0.5
+        else:
+            # normalisation image avant patchifier
+            image = 2 * (image[None, None] / 255.0) - 0.5
+
         
         # patchifier
         with autocast(enabled=self.cfg.MIXED_PRECISION):
-            fmap, gmap, imap, patches, _, clr = \
-                self.network.patchify(  image,
-                                        disp,
-                                        patches_per_image=self.cfg.PATCHES_PER_FRAME, 
-                                        centroid_sel_strat=self.cfg.CENTROID_SEL_STRAT, 
-                                        return_color=True)
+
+            if self.stereo:
+                # recuperer info image gauche
+                #import pdb; pdb.set_trace()
+                fmap, gmap, imap, patches, _, clr, fmap_right = \
+                        self.network.patchify(image,
+                                              disp,
+                                              patches_per_image=self.cfg.PATCHES_PER_FRAME, 
+                                              centroid_sel_strat=self.cfg.CENTROID_SEL_STRAT, 
+                                              return_color=True,
+                                              stereo=self.stereo)
+            else:
+                # info image system monoculaire
+                fmap, gmap, imap, patches, _, clr = \
+                        self.network.patchify(  image,
+                                              disp,
+                                              patches_per_image=self.cfg.PATCHES_PER_FRAME, 
+                                              centroid_sel_strat=self.cfg.CENTROID_SEL_STRAT, 
+                                              return_color=True)
+
 
         ### update state attributes ###
         self.tlist.append(tstamp)
@@ -462,6 +581,12 @@ class DPVO:
         self.gmap_[self.n % self.pmem] = gmap.squeeze()
         self.fmap1_[:, self.n % self.mem] = F.avg_pool2d(fmap[0], 1, 1)
         self.fmap2_[:, self.n % self.mem] = F.avg_pool2d(fmap[0], 4, 4)
+
+
+        # pyramid droite
+        if self.stereo:
+            self.fmap1_right[:, self.n % self.mem] = F.avg_pool2d(fmap_right[0], 1, 1)
+            self.fmap2_right[:, self.n % self.mem] = F.avg_pool2d(fmap_right[0], 4, 4)
 
         # Initialisation
         self.counter += 1        
