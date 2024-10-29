@@ -17,124 +17,128 @@ typedef unsigned char uchar;
 std::mutex mtx;
 
 class Viewer {
-  public:
-    Viewer(
-      const torch::Tensor image,
-      const torch::Tensor poses,
-      const torch::Tensor points,
-      const torch::Tensor colors,
-      const torch::Tensor intrinsics);
+    public:
+        Viewer(
+                const torch::Tensor image,
+                const torch::Tensor poses,
+                const torch::Tensor points,
+                const torch::Tensor colors,
+                const torch::Tensor intrinsics);
 
-    void close() {
-      running = false;
-    };
+        void close() {
+            running = false;
+        };
 
-    void join() {
-      tViewer.join();
-    };
+        void join() {
+            tViewer.join();
+        };
 
-    void update_image(torch::Tensor img) {
-      mtx.lock();
-      redraw = true;
-      image = img.permute({1,2,0}).to(torch::kCPU);
-      mtx.unlock();
-    }
+        void update_image(torch::Tensor img) {
+            mtx.lock();
+            redraw = true;
+            image = img.permute({1,2,0}).to(torch::kCPU);
+            if (!image.is_contiguous()) 
+            {
+                image = image.contiguous();
+            }
+            mtx.unlock();
+        }
 
-    // main visualization
-    void run();
+        // main visualization
+        void run();
 
-  private:
-    bool running;
-    std::thread tViewer;
+    private:
+        bool running;
+        std::thread tViewer;
 
-    int w;
-    int h;
-    int ux;
+        int w;
+        int h;
+        int ux;
 
-    int nPoints, nFrames;
-    const torch::Tensor counter;
-    const torch::Tensor dirty;
+        int nPoints, nFrames;
+        const torch::Tensor counter;
+        const torch::Tensor dirty;
 
-    torch::Tensor image;
-    torch::Tensor poses;
-    torch::Tensor points;
-    torch::Tensor colors;
-    torch::Tensor intrinsics;
+        torch::Tensor image;
+        torch::Tensor poses;
+        torch::Tensor points;
+        torch::Tensor colors;
+        torch::Tensor intrinsics;
 
-    bool redraw;
-    bool showForeground;
-    bool showBackground;
+        bool redraw;
+        bool showForeground;
+        bool showBackground;
 
-    torch::Tensor transformMatrix;
+        torch::Tensor transformMatrix;
 
-    double filterThresh;
-    void drawPoints();
-    void drawPoses();
+        double filterThresh;
+        void drawPoints();
+        void drawPoses();
 
-    void initVBO();
-    void destroyVBO();
+        void initVBO();
+        void destroyVBO();
 
-    // OpenGL buffers (vertex buffer, color buffer)
-    GLuint vbo, cbo;
-    struct cudaGraphicsResource *xyz_res;
-    struct cudaGraphicsResource *rgb_res;
+        // OpenGL buffers (vertex buffer, color buffer)
+        GLuint vbo, cbo;
+        struct cudaGraphicsResource *xyz_res;
+        struct cudaGraphicsResource *rgb_res;
 
 };
 
 Viewer::Viewer(
-      const torch::Tensor image,
-      const torch::Tensor poses, 
-      const torch::Tensor points,
-      const torch::Tensor colors,
-      const torch::Tensor intrinsics)
-  : image(image), poses(poses), points(points), colors(colors), intrinsics(intrinsics)
+        const torch::Tensor image,
+        const torch::Tensor poses, 
+        const torch::Tensor points,
+        const torch::Tensor colors,
+        const torch::Tensor intrinsics)
+    : image(image), poses(poses), points(points), colors(colors), intrinsics(intrinsics)
 {
-  running = true;
-  redraw = true;
-  nFrames = poses.size(0);
-  nPoints = points.size(0);
+    running = true;
+    redraw = true;
+    nFrames = poses.size(0);
+    nPoints = points.size(0);
 
-  ux = 0;
-  h = image.size(0);
-  w = image.size(1);
+    ux = 0;
+    h = image.size(0);
+    w = image.size(1);
 
-  tViewer = std::thread(&Viewer::run, this);
+    tViewer = std::thread(&Viewer::run, this);
 };
 
 void Viewer::drawPoints() {
-  float *xyz_ptr;
-  uchar *rgb_ptr;
-  size_t xyz_bytes;
-  size_t rgb_bytes; 
+    float *xyz_ptr;
+    uchar *rgb_ptr;
+    size_t xyz_bytes;
+    size_t rgb_bytes; 
 
-  unsigned int size_xyz = 3 * points.size(0) * sizeof(float);
-  unsigned int size_rgb = 3 * points.size(0) * sizeof(uchar);
+    unsigned int size_xyz = 3 * points.size(0) * sizeof(float);
+    unsigned int size_rgb = 3 * points.size(0) * sizeof(uchar);
 
-  cudaGraphicsResourceGetMappedPointer((void **) &xyz_ptr, &xyz_bytes, xyz_res);
-  cudaGraphicsResourceGetMappedPointer((void **) &rgb_ptr, &rgb_bytes, rgb_res);
+    cudaGraphicsResourceGetMappedPointer((void **) &xyz_ptr, &xyz_bytes, xyz_res);
+    cudaGraphicsResourceGetMappedPointer((void **) &rgb_ptr, &rgb_bytes, rgb_res);
 
-  float *xyz_data = points.data_ptr<float>();
-  cudaMemcpy(xyz_ptr, xyz_data, xyz_bytes, cudaMemcpyDeviceToDevice);
+    float *xyz_data = points.data_ptr<float>();
+    cudaMemcpy(xyz_ptr, xyz_data, xyz_bytes, cudaMemcpyDeviceToDevice);
 
-  uchar *rgb_data = colors.data_ptr<uchar>();
-  cudaMemcpy(rgb_ptr, rgb_data, rgb_bytes, cudaMemcpyDeviceToDevice);
+    uchar *rgb_data = colors.data_ptr<uchar>();
+    cudaMemcpy(rgb_ptr, rgb_data, rgb_bytes, cudaMemcpyDeviceToDevice);
 
-  // bind color buffer
-  glBindBuffer(GL_ARRAY_BUFFER, cbo);
-  glColorPointer(3, GL_UNSIGNED_BYTE, 0, 0);
-  glEnableClientState(GL_COLOR_ARRAY);
+    // bind color buffer
+    glBindBuffer(GL_ARRAY_BUFFER, cbo);
+    glColorPointer(3, GL_UNSIGNED_BYTE, 0, 0);
+    glEnableClientState(GL_COLOR_ARRAY);
 
-  glBindBuffer(GL_ARRAY_BUFFER, vbo);
-  glVertexPointer(3, GL_FLOAT, 0, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glVertexPointer(3, GL_FLOAT, 0, 0);
 
-  // bind vertex buffer
-  glEnableClientState(GL_VERTEX_ARRAY);
-  glDrawArrays(GL_POINTS, 0, points.size(0));
-  glDisableClientState(GL_VERTEX_ARRAY);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
+    // bind vertex buffer
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glDrawArrays(GL_POINTS, 0, points.size(0));
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-  glDisableClientState(GL_COLOR_ARRAY);
-  glBindBuffer(GL_ARRAY_BUFFER, 0);
+    glDisableClientState(GL_COLOR_ARRAY);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
 }
 
