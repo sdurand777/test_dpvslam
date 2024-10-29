@@ -17,67 +17,71 @@ typedef unsigned char uchar;
 std::mutex mtx;
 
 class Viewer {
-  public:
-    Viewer(
-      const torch::Tensor image,
-      const torch::Tensor poses,
-      const torch::Tensor points,
-      const torch::Tensor colors,
-      const torch::Tensor intrinsics);
+    public:
+        Viewer(
+                const torch::Tensor image,
+                const torch::Tensor poses,
+                const torch::Tensor points,
+                const torch::Tensor colors,
+                const torch::Tensor intrinsics);
 
-    void close() {
-      running = false;
-    };
+        void close() {
+            running = false;
+        };
 
-    void join() {
-      tViewer.join();
-    };
+        void join() {
+            tViewer.join();
+        };
 
-    void update_image(torch::Tensor img) {
-      mtx.lock();
-      redraw = true;
-      image = img.permute({1,2,0}).to(torch::kCPU);
-      mtx.unlock();
-    }
+        void update_image(torch::Tensor img) {
+            mtx.lock();
+            redraw = true;
+            image = img.permute({1,2,0}).to(torch::kCPU);
+            if (!image.is_contiguous()) 
+            {
+                image = image.contiguous();
+            }
+            mtx.unlock();
+        }
 
-    // main visualization
-    void run();
+        // main visualization
+        void run();
 
-  private:
-    bool running;
-    std::thread tViewer;
+    private:
+        bool running;
+        std::thread tViewer;
 
-    int w;
-    int h;
-    int ux;
+        int w;
+        int h;
+        int ux;
 
-    int nPoints, nFrames;
-    const torch::Tensor counter;
-    const torch::Tensor dirty;
+        int nPoints, nFrames;
+        const torch::Tensor counter;
+        const torch::Tensor dirty;
 
-    torch::Tensor image;
-    torch::Tensor poses;
-    torch::Tensor points;
-    torch::Tensor colors;
-    torch::Tensor intrinsics;
+        torch::Tensor image;
+        torch::Tensor poses;
+        torch::Tensor points;
+        torch::Tensor colors;
+        torch::Tensor intrinsics;
 
-    bool redraw;
-    bool showForeground;
-    bool showBackground;
+        bool redraw;
+        bool showForeground;
+        bool showBackground;
 
-    torch::Tensor transformMatrix;
+        torch::Tensor transformMatrix;
 
-    double filterThresh;
-    void drawPoints();
-    void drawPoses();
+        double filterThresh;
+        void drawPoints();
+        void drawPoses();
 
-    void initVBO();
-    void destroyVBO();
+        void initVBO();
+        void destroyVBO();
 
-    // OpenGL buffers (vertex buffer, color buffer)
-    GLuint vbo, cbo;
-    struct cudaGraphicsResource *xyz_res;
-    struct cudaGraphicsResource *rgb_res;
+        // OpenGL buffers (vertex buffer, color buffer)
+        GLuint vbo, cbo;
+        struct cudaGraphicsResource *xyz_res;
+        struct cudaGraphicsResource *rgb_res;
 
 };
 
