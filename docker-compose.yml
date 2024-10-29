@@ -1,0 +1,23 @@
+
+services:
+
+  dpvslam:
+    image: docker_dpvslam
+    network_mode: host
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    environment:
+      - DISPLAY=$DISPLAY
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /home/ivm/dpvslam_dev/:/home/smith/dpvslam_dev/
+      - /home/ivm/config_neovim/:/home/smith/.config/nvim/
+      - /home/ivm/test_pipe/:/home/smith/test_pipe/
+    tty: true
+
