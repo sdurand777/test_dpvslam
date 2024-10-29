@@ -112,6 +112,9 @@ class Patchifier(nn.Module):
     #def forward(self, images, patches_per_image=80, disps=None, centroid_sel_strat='RANDOM', return_color=False):
     def forward(self, images, disps = None, patches_per_image=80, centroid_sel_strat='RANDOM', return_color=False):
         """ extract patches from input images """
+
+        #import pdb; pdb.set_trace()
+
         fmap = self.fnet(images) / 4.0
         imap = self.inet(images) / 4.0
 
@@ -152,6 +155,16 @@ class Patchifier(nn.Module):
 
         if disps is None:
             disps = torch.ones(b, n, h, w, device="cuda")
+        else:
+            # grid 3, 132, 240 pour recuperer les indices pour els patches
+            disps = disps.unsqueeze(0).unsqueeze(0)
+# Diviser les dimensions par 4
+            new_height = disps.shape[2] // 4
+            new_width = disps.shape[3] // 4
+# Redimensionner l'image en divisant les dimensions par 4
+            disps_resized = F.interpolate(disps, size=(new_height, new_width), mode='bilinear', align_corners=False)
+            disps = disps_resized.to(fmap.device)
+
 
 #         # grid 3, 132, 240 pour recuperer les indices pour els patches
 #         disps = disps.unsqueeze(0).unsqueeze(0)
