@@ -160,7 +160,7 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--network', type=str, default='dpvo.pth')
-    parser.add_argument('--imagedir', type=str, default='/home/ivm/20240823-12h10m44s-Pointe_Rouge-Escargot2_10x10/resized/left')
+    parser.add_argument('--imagedir', type=str, default='../test_pipe/')
     parser.add_argument('--calib', type=str)
     parser.add_argument('--name', type=str, help='name your run', default='result')
     parser.add_argument('--stride', type=int, default=2)

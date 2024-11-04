@@ -13,6 +13,127 @@ from torch.nn import functional as F
 
 import matplotlib.pyplot as plt
 
+
+
+def image_stream_mono_depth_ivm(queue, imagedir, stride, skip=0):
+    """ image generator """
+
+    img_exts = ["*.png", "*.jpeg", "*.jpg", "*.JPG"]
+
+    print("imagedir : ", imagedir)
+
+#    image_list = sorted(chain.from_iterable(Path(imagedir).glob(e) for e in img_exts))[skip::stride]
+
+    image_list = sorted(glob.glob(os.path.join(imagedir, 'left', '*.JPG')))[::stride]
+    depth_list = sorted(glob.glob(os.path.join(imagedir, 'depth', '*.npy')))[::stride]
+
+    print("image_list : ", image_list[:10])
+
+
+    #for t, imfile in enumerate(image_list):
+
+    for t, (imfile, depthfile) in enumerate(zip(image_list, depth_list)):
+        image = cv2.imread(str(imfile))
+
+       
+        print("imfile : ", imfile)
+
+        h, w, _ = image.shape
+
+        img = image
+        H, W, _ = img.shape
+        
+        # rectification
+        K_r = np.array([
+            322.638671875, 0, 255.9466552734375,
+            0, 322.638671875, 187.4475402832031,
+            0, 0, 1
+            ]).reshape(3,3)
+        d_r = np.array([
+            -0.070313379,
+            0.071827024,
+            0.0004486586,
+            0.00070285366,
+            -0.015095583
+            ]).reshape(5)
+        R_r = np.array([
+            0.9999984896881986, -0.001713768657967563, -0.0002891683050380818,
+            0.001714143276046202, 0.9999976855080072, 0.001300265918105914,
+            0.0002869392807828858, -0.001300759630204676, 0.9999991128447232
+            ]).reshape(3,3)
+
+        P_r = np.array([
+            322.6092376708984, 0, 257.7363166809082, 48.37263543147446,
+            0, 322.6092376708984, 186.6225147247314, 0,
+            0, 0, 1, 0]).reshape(3,4)
+
+        map_r = cv2.initUndistortRectifyMap(K_r, d_r, R_r, P_r[:3,:3], (W, H), cv2.CV_32F)
+
+        intrinsics_vec = [322.6092376708984, 322.6092376708984, 257.7363166809082, 186.6225147247314]
+
+        ht0, wd0 = [376, 514]
+
+        images = [cv2.remap(img, map_r[0], map_r[1], interpolation=cv2.INTER_LINEAR)]
+
+        images = torch.from_numpy(np.stack(images, 0))
+
+        image_tmp = images.numpy().squeeze(0)
+        # cv2.imshow("title", image_tmp)
+        # cv2.waitKey(0)
+ 
+        #images = images.permute(0, 3, 1, 2).to("cuda", dtype=torch.float32)
+        images = images.permute(0, 3, 1, 2)
+
+        # Ensure either size or scale_factor is defined
+
+        #image_size = [448, 736]
+        image_size = [528, 960]
+        #image_size = [514, 616]
+
+        #print("++++++++ image_size  : ",image_size)
+        if image_size is not None:
+            images = F.interpolate(images, size=image_size, mode="bilinear", align_corners=False)
+        else:
+            raise ValueError("image_size must be defined")
+            
+        intrinsics = torch.as_tensor(intrinsics_vec)
+        intrinsics[0] *= image_size[1] / wd0
+        intrinsics[1] *= image_size[0] / ht0
+        intrinsics[2] *= image_size[1] / wd0
+        intrinsics[3] *= image_size[0] / ht0
+
+        # ----------------- depth
+        depth = - np.load(depthfile)/1000
+        print("depth values : ")
+        print("depth min : ",np.min(depth))
+        print("depth max : ",np.max(depth))
+        print("depth shape : ",depth.shape)
+
+        depth = torch.as_tensor(depth)
+        #depth = F.interpolate(depth[None,None], image_size).squeeze()
+        
+        depth = F.interpolate(depth[None,None], image_size, mode='nearest').squeeze()
+        
+        h1 = image_size[0]
+        w1 = image_size[1]
+        depth = depth[:h1-h1%8, :w1-w1%8]
+
+        queue.put((t, images, intrinsics, depth))
+
+    queue.put((-1, images, intrinsics, depth))
+
+
+
+
+
+
+
+
+
+
+
+
+
 def image_stream(queue, imagedir, calib, stride, skip=0):
     """ Image generator """
 
@@ -867,6 +988,10 @@ def image_stream_mono_depth_ivm(queue, imagedir, stride, skip=0):
         h1 = image_size[0]
         w1 = image_size[1]
         depth = depth[:h1-h1%8, :w1-w1%8]
+
+
+        # remove first dim 
+        images = images.squeeze(0)
 
         queue.put((t, images, intrinsics, depth))
 

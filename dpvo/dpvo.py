@@ -56,9 +56,13 @@ class DPVO:
 
         ### frame memory size ###
         self.pmem = self.mem = 36 # 32 was too small given default settings
-        if self.cfg.LOOP_CLOSURE:
-            self.last_global_ba = -1000 # keep track of time since last global opt
-            self.pmem = self.cfg.MAX_EDGE_AGE # patch memory
+        # if self.cfg.LOOP_CLOSURE:
+        #     self.last_global_ba = -1000 # keep track of time since last global opt
+        #     self.pmem = self.cfg.MAX_EDGE_AGE # patch memory
+
+        self.last_global_ba = -1000 # keep track of time since last global opt
+        self.pmem = self.cfg.MAX_EDGE_AGE # patch memory
+
 
         self.imap_ = torch.zeros(self.pmem, self.M, DIM, **kwargs)
         self.gmap_ = torch.zeros(self.pmem, self.M, 128, self.P, self.P, **kwargs)
@@ -422,10 +426,12 @@ class DPVO:
 
         # reprojection pour update les target pour le BA
         with Timer("other", enabled=self.enable_timing):
-            coords = self.reproject(stereo=self.stereo)
+            #coords = self.reproject(stereo=self.stereo)
+            coords = self.reproject()
 
             with autocast(enabled=True):
-                corr = self.corr(coords, stereo=self.stereo)
+                #corr = self.corr(coords, stereo=self.stereo)
+                corr = self.corr(coords)
                 ctx = self.imap[:, self.pg.kk % (self.M * self.pmem)]
                 self.pg.net, (delta, weight, _) = \
                     self.network.update(self.pg.net, ctx, corr, None, self.pg.ii, self.pg.jj, self.pg.kk)
@@ -446,7 +452,7 @@ class DPVO:
                     t0 = self.n - self.cfg.OPTIMIZATION_WINDOW if self.is_initialized else 1
                     t0 = max(t0, 1)
 
-                    import pdb; pdb.set_trace()
+                    #import pdb; pdb.set_trace()
 
                     fastba.BA(self.poses, self.patches, self.intrinsics, 
                         target, weight, lmbda, self.pg.ii, self.pg.jj, self.pg.kk, t0, self.n, M=self.M, iterations=2, eff_impl=False)
@@ -500,42 +506,42 @@ class DPVO:
 
 
         if self.viewer is not None:
-            if self.stereo:
-                self.viewer.update_image(image[0])
-            else:
-                self.viewer.update_image(image)
+            # if self.stereo:
+            #     self.viewer.update_image(image[0])
+            # else:
+            self.viewer.update_image(image)
 
-
-        # post traitement image
-        if self.stereo:
+        #
+        # # post traitement image
+        # if self.stereo:
+        #     # normalisation image avant patchifier
+        #     image = 2 * (image[None,None] / 255.0) - 0.5
+        # else:
             # normalisation image avant patchifier
-            image = 2 * (image[None,None] / 255.0) - 0.5
-        else:
-            # normalisation image avant patchifier
-            image = 2 * (image[None, None] / 255.0) - 0.5
+        image = 2 * (image[None, None] / 255.0) - 0.5
 
         
         # patchifier
         with autocast(enabled=self.cfg.MIXED_PRECISION):
 
-            if self.stereo:
-                # recuperer info image gauche
-                #import pdb; pdb.set_trace()
-                fmap, gmap, imap, patches, _, clr, fmap_right = \
-                        self.network.patchify(image,
-                                              disp,
-                                              patches_per_image=self.cfg.PATCHES_PER_FRAME, 
-                                              centroid_sel_strat=self.cfg.CENTROID_SEL_STRAT, 
-                                              return_color=True,
-                                              stereo=self.stereo)
-            else:
-                # info image system monoculaire
-                fmap, gmap, imap, patches, _, clr = \
-                        self.network.patchify(  image,
-                                              disp,
-                                              patches_per_image=self.cfg.PATCHES_PER_FRAME, 
-                                              centroid_sel_strat=self.cfg.CENTROID_SEL_STRAT, 
-                                              return_color=True)
+            # if self.stereo:
+            #     # recuperer info image gauche
+            #     #import pdb; pdb.set_trace()
+            #     fmap, gmap, imap, patches, _, clr, fmap_right = \
+            #             self.network.patchify(image,
+            #                                   disp,
+            #                                   patches_per_image=self.cfg.PATCHES_PER_FRAME, 
+            #                                   centroid_sel_strat=self.cfg.CENTROID_SEL_STRAT, 
+            #                                   return_color=True,
+            #                                   stereo=self.stereo)
+            # else:
+            #     # info image system monoculaire
+            fmap, gmap, imap, patches, _, clr = \
+                    self.network.patchify(  image,
+                                          disp,
+                                          patches_per_image=self.cfg.PATCHES_PER_FRAME, 
+                                          centroid_sel_strat=self.cfg.CENTROID_SEL_STRAT, 
+                                          return_color=True)
 
 
         ### update state attributes ###
@@ -568,11 +574,11 @@ class DPVO:
                 self.pg.poses_[self.n] = tvec_qvec
 
 
-        # Depth initialisation based on median
-        patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
-        if self.is_initialized:
-            s = torch.median(self.pg.patches_[self.n-3:self.n,:,2])
-            patches[:,:,2] = s
+        # # Depth initialisation based on median
+        # patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
+        # if self.is_initialized:
+        #     s = torch.median(self.pg.patches_[self.n-3:self.n,:,2])
+        #     patches[:,:,2] = s
 
         self.pg.patches_[self.n] = patches
 
@@ -598,14 +604,22 @@ class DPVO:
         self.n += 1
         self.m += self.M
 
+        # # loop closure
+        # if self.cfg.LOOP_CLOSURE:
+        #     if self.n - self.last_global_ba >= self.cfg.GLOBAL_OPT_FREQ:
+        #         """ Add loop closure factors """
+        #         lii, ljj = self.pg.edges_loop()
+        #         if lii.numel() > 0:
+        #             self.last_global_ba = self.n
+        #             self.append_factors(lii, ljj)
+
         # loop closure
-        if self.cfg.LOOP_CLOSURE:
-            if self.n - self.last_global_ba >= self.cfg.GLOBAL_OPT_FREQ:
-                """ Add loop closure factors """
-                lii, ljj = self.pg.edges_loop()
-                if lii.numel() > 0:
-                    self.last_global_ba = self.n
-                    self.append_factors(lii, ljj)
+        if self.n - self.last_global_ba >= self.cfg.GLOBAL_OPT_FREQ:
+            """ Add loop closure factors """
+            lii, ljj = self.pg.edges_loop()
+            if lii.numel() > 0:
+                self.last_global_ba = self.n
+                self.append_factors(lii, ljj)
 
         # Add forward and backward factors
         self.append_factors(*self.__edges_forw())

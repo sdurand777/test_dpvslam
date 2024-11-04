@@ -113,66 +113,17 @@ class Patchifier(nn.Module):
     def forward(self, images, disps = None, patches_per_image=80, centroid_sel_strat='RANDOM', return_color=False, stereo=False):
         """ extract patches from input images """
 
-        #import pdb; pdb.set_trace()
-
-        # fmap = self.fnet(images) / 4.0
-        # imap = self.inet(images) / 4.0
-
-
-        # extraction des features
-        if stereo:
-            fmap = self.fnet(images[:,:,0]) / 4.0 # [1, 1; 128, 132, 240]
-            fmap_right = self.fnet(images[:,:,1]) / 4.0 # [1, 1; 128, 132, 240]
-            # only left context 
-            imap = self.inet(images[:,:,0]) / 4.0 # {1, 1, 384; 132, 240}
-        else:
-            fmap = self.fnet(images) / 4.0 # [1, 1; 128, 132, 240]
-            imap = self.inet(images) / 4.0 # {1, 1, 384; 132, 240}
-
-
+        fmap = self.fnet(images) / 4.0 # [1, 1; 128, 132, 240]
+        imap = self.inet(images) / 4.0 # {1, 1, 384; 132, 240}
 
         b, n, c, h, w = fmap.shape
         P = self.patch_size
 
-        # # bias patch selection towards regions with high gradient
-        # if centroid_sel_strat == 'GRADIENT_BIAS':
-        #     g = self.__image_gradient(images)
-        #     x = torch.randint(1, w-1, size=[n, 3*patches_per_image], device="cuda")
-        #     y = torch.randint(1, h-1, size=[n, 3*patches_per_image], device="cuda")
-        #
-        #     coords = torch.stack([x, y], dim=-1).float()
-        #     g = altcorr.patchify(g[0,:,None], coords, 0).view(n, 3 * patches_per_image)
-        #     
-        #     ix = torch.argsort(g, dim=1)
-        #     x = torch.gather(x, 1, ix[:, -patches_per_image:])
-        #     y = torch.gather(y, 1, ix[:, -patches_per_image:])
-        #
-        # elif centroid_sel_strat == 'RANDOM':
-        #     x = torch.randint(1, w-1, size=[n, patches_per_image], device="cuda")
-        #     y = torch.randint(1, h-1, size=[n, patches_per_image], device="cuda")
-        #
-        # else:
-        #     raise NotImplementedError(f"Patch centroid selection not implemented: {centroid_sel_strat}")
-        x = torch.randint(1, w-1, size=[n, patches_per_image], device="cuda")
-        y = torch.randint(1, h-1, size=[n, patches_per_image], device="cuda")
-
-
-        coords = torch.stack([x, y], dim=-1).float()
-        imap = altcorr.patchify(imap[0], coords, 0).view(b, -1, DIM, 1, 1)
-        gmap = altcorr.patchify(fmap[0], coords, P//2).view(b, -1, 128, P, P)
-
-        if return_color:
-            if stereo:
-                # color only on left
-                clr = altcorr.patchify(images[0,:,0], 4*(coords + 0.5), 0).view(b, -1, 3)
-            else:
-                clr = altcorr.patchify(images[0], 4*(coords + 0.5), 0).view(b, -1, 3)
-
-        #import pdb; pdb.set_trace()
-
+        # disp values
         if disps is None:
             disps = torch.ones(b, n, h, w, device="cuda")
         else:
+            print("---------- USE DISP SENSOR --------")
             # grid 3, 132, 240 pour recuperer les indices pour els patches
             disps = disps.unsqueeze(0).unsqueeze(0)
 # Diviser les dimensions par 4
@@ -183,20 +134,25 @@ class Patchifier(nn.Module):
             disps = disps_resized.to(fmap.device)
 
 
-#         # grid 3, 132, 240 pour recuperer les indices pour els patches
-#         disps = disps.unsqueeze(0).unsqueeze(0)
-# # Diviser les dimensions par 4
-#         new_height = disps.shape[2] // 4
-#         new_width = disps.shape[3] // 4
-#
-# # Redimensionner l'image en divisant les dimensions par 4
-#         disps_resized = F.interpolate(disps, size=(new_height, new_width), mode='bilinear', align_corners=False)
-#         disps_resized = disps_resized.to(fmap.device)
-#
-#         #if DEBUG: import pdb; pdb.set_trace()
-#         grid, _ = coords_grid_with_index(disps_resized, device=fmap.device)
+        depth = disps[0][0]
+# Étape 1 : Créer le masque pour conserver les valeurs entre 0.8 et 1.8
+        mask = (depth >= 0.5) & (depth <= 3.0)
 
-        # disps = torch.ones(b, n, h, w, device="cuda")
+# Étape 2 : Récupérer les indices des valeurs qui respectent ce masque
+        indices = mask.nonzero(as_tuple=False)  # Renvoie un tensor Nx2 avec les indices (x, y)
+
+        coords = indices[torch.randperm(indices.size(0))[:patches_per_image]][:,[1,0]].float().unsqueeze(0)
+
+        # on prend la disparite on inverse la depth
+        disps = 1/disps
+
+        imap = altcorr.patchify(imap[0], coords, 0).view(b, -1, DIM, 1, 1)
+        gmap = altcorr.patchify(fmap[0], coords, P//2).view(b, -1, 128, P, P)
+
+        if return_color:
+            clr = altcorr.patchify(images[0], 4*(coords + 0.5), 0).view(b, -1, 3)
+
+
         grid, _ = coords_grid_with_index(disps, device=fmap.device)
 
         patches = altcorr.patchify(grid[0], coords, P//2).view(b, -1, 3, P, P)
@@ -205,10 +161,10 @@ class Patchifier(nn.Module):
         index = index.repeat(1, patches_per_image).reshape(-1)
 
         if return_color:
-            if stereo:
-                return fmap, gmap, imap, patches, index, clr, fmap_right
-            else:
-                return fmap, gmap, imap, patches, index, clr
+            # if stereo:
+            #     return fmap, gmap, imap, patches, index, clr, fmap_right
+            # else:
+            return fmap, gmap, imap, patches, index, clr
 
         return fmap, gmap, imap, patches, index
 
