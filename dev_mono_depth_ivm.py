@@ -149,7 +149,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     cfg.merge_from_file(args.config)
-    #cfg.merge_from_list(args.opts)
+    cfg.merge_from_list(args.opts)
     cfg.BUFFER_SIZE = args.buffer
 
     print("Running with config...")

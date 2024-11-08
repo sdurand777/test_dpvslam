@@ -66,6 +66,7 @@ class DPVO:
         self.pg = PatchGraph(self.cfg, self.P, self.DIM, self.pmem, **kwargs)
 
         # classic backend
+        import pdb; pdb.set_trace()
         if self.cfg.CLASSIC_LOOP_CLOSURE:
             self.load_long_term_loop_closure()
 
@@ -625,6 +626,8 @@ class DPVO:
             self.keyframe()
 
         # classic loop closure based on ORB descriotors
+        import pdb; pdb.set_trace()
         if self.cfg.CLASSIC_LOOP_CLOSURE:
+            print("*" * 300)
             self.long_term_lc.attempt_loop_closure(self.n)
             self.long_term_lc.lc_callback()
