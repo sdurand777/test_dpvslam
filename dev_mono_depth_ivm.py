@@ -46,7 +46,7 @@ def run(cfg, network, imagedir, calib, stride=0, skip=0, viz=False, timeit=False
         print("image t : ", t)
 
         if t < 0: break
-        if t > 440: break
+        #if t > 440: break
         
         # mettre sur cuda 
         images = images.cuda()
@@ -133,7 +133,8 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--network', type=str, default='dpvo.pth')
-    parser.add_argument('--imagedir', type=str, default='../test_pipe/')
+    #parser.add_argument('--imagedir', type=str, default='../test_pipe/')
+    parser.add_argument('--imagedir', type=str, default='../escargot/')
     parser.add_argument('--calib', type=str)
     parser.add_argument('--stride', type=int, default=1)
     parser.add_argument('--skip', type=int, default=0)
@@ -148,6 +149,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     cfg.merge_from_file(args.config)
+    #cfg.merge_from_list(args.opts)
     cfg.BUFFER_SIZE = args.buffer
 
     print("Running with config...")
