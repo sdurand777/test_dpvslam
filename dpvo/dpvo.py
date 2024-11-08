@@ -56,13 +56,9 @@ class DPVO:
 
         ### frame memory size ###
         self.pmem = self.mem = 36 # 32 was too small given default settings
-        # if self.cfg.LOOP_CLOSURE:
-        #     self.last_global_ba = -1000 # keep track of time since last global opt
-        #     self.pmem = self.cfg.MAX_EDGE_AGE # patch memory
-
-        self.last_global_ba = -1000 # keep track of time since last global opt
-        self.pmem = self.cfg.MAX_EDGE_AGE # patch memory
-
+        if self.cfg.LOOP_CLOSURE:
+            self.last_global_ba = -1000 # keep track of time since last global opt
+            self.pmem = self.cfg.MAX_EDGE_AGE # patch memory
 
         self.imap_ = torch.zeros(self.pmem, self.M, DIM, **kwargs)
         self.gmap_ = torch.zeros(self.pmem, self.M, 128, self.P, self.P, **kwargs)
@@ -605,21 +601,13 @@ class DPVO:
         self.m += self.M
 
         # # loop closure
-        # if self.cfg.LOOP_CLOSURE:
-        #     if self.n - self.last_global_ba >= self.cfg.GLOBAL_OPT_FREQ:
-        #         """ Add loop closure factors """
-        #         lii, ljj = self.pg.edges_loop()
-        #         if lii.numel() > 0:
-        #             self.last_global_ba = self.n
-        #             self.append_factors(lii, ljj)
-
-        # loop closure
-        if self.n - self.last_global_ba >= self.cfg.GLOBAL_OPT_FREQ:
-            """ Add loop closure factors """
-            lii, ljj = self.pg.edges_loop()
-            if lii.numel() > 0:
-                self.last_global_ba = self.n
-                self.append_factors(lii, ljj)
+        if self.cfg.LOOP_CLOSURE:
+            if self.n - self.last_global_ba >= self.cfg.GLOBAL_OPT_FREQ:
+                """ Add loop closure factors """
+                lii, ljj = self.pg.edges_loop()
+                if lii.numel() > 0:
+                    self.last_global_ba = self.n
+                    self.append_factors(lii, ljj)
 
         # Add forward and backward factors
         self.append_factors(*self.__edges_forw())

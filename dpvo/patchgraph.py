@@ -97,27 +97,27 @@ class PatchGraph:
 
         # # version original
 #         # import pdb; pdb.set_trace()
-        # flow_mg_sum = einops.reduce(flow_mg * val, '1 (fl M) 1 1 -> fl', 'sum', M=self.M).float()
+        flow_mg_sum = einops.reduce(flow_mg * val, '1 (fl M) 1 1 -> fl', 'sum', M=self.M).float()
 
         # version san einops
-#         import pdb; pdb.set_trace()
-        flow_mg_mult = flow_mg * val
-        reshaped_tensor = flow_mg_mult.view(1, -1, self.M, 1, 1)  # Shape (1, 11, 96, 1, 1)
-        flow_mg_sum = reshaped_tensor.sum(dim=2)  # Réduit la dimension M
-        flow_mg_sum = flow_mg_sum.squeeze()  # Pour obtenir une forme (11,)
+# #         import pdb; pdb.set_trace()
+#         flow_mg_mult = flow_mg * val
+#         reshaped_tensor = flow_mg_mult.view(1, -1, self.M, 1, 1)  # Shape (1, 11, 96, 1, 1)
+#         flow_mg_sum = reshaped_tensor.sum(dim=2)  # Réduit la dimension M
+#         flow_mg_sum = flow_mg_sum.squeeze()  # Pour obtenir une forme (11,)
    
 
         # # compute cummulated flow ?
 #         # import pdb; pdb.set_trace()
-        # num_val = einops.reduce(val, '1 (fl M) 1 1 -> fl', 'sum', M=self.M).clamp(min=1)
+        num_val = einops.reduce(val, '1 (fl M) 1 1 -> fl', 'sum', M=self.M).clamp(min=1)
 
 
-        # version sans einops
-#         import pdb; pdb.set_trace()
-        reshaped_val = val.view(1, -1, self.M, 1, 1)  # Shape (1, 11, 96, 1, 1)
-        num_val = reshaped_val.sum(dim=2)  # Réduit la dimension M, forme finale (1, 11, 1, 1)
-        num_val = num_val.clamp(min=1)
-        num_val = num_val.squeeze()
+#         # version sans einops
+# #         import pdb; pdb.set_trace()
+#         reshaped_val = val.view(1, -1, self.M, 1, 1)  # Shape (1, 11, 96, 1, 1)
+#         num_val = reshaped_val.sum(dim=2)  # Réduit la dimension M, forme finale (1, 11, 1, 1)
+#         num_val = num_val.clamp(min=1)
+#         num_val = num_val.squeeze()
 
         flow_mag = torch.where(num_val > (self.M * 0.75), flow_mg_sum / num_val, torch.inf)
 
